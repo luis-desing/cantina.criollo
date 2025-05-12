@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <title>Stock de Vinos</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background-color: #f0f4f8;
+      margin: 0;
+      padding: 0;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    main {
+      flex: 1;
+    }
+    h1 {
+      text-align: center;
+      color: #4a90e2;
+      margin-top: 20px;
+      font-size: 24px;
+    }
+    .contenedor-stock {
+      margin: 20px auto;
+      padding: 20px;
+      border-radius: 10px;
+      background-color: #fff;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 500px;
+    }
+    #vinosTable {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    #vinosTable th,
+    #vinosTable td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+      vertical-align: middle;
+    }
+    #vinosTable th {
+      background-color: #f0f4f8;
+      font-weight: bold;
+      color: #333;
+    }
+    #vinosTable tbody tr:nth-child(odd) {
+      background-color: #f9f9f9;
+    }
+    #vinosTable tbody tr:hover {
+      background-color: #f1f1f1;
+    }
+    #vinosTable td input[type="number"] {
+      width: 60px;
+      padding: 5px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background-color: #fff;
+      font-size: 16px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .boton-actualizar, .boton-borrar {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 15px;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-size: 18px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      box-sizing: border-box;
+    }
+    .boton-actualizar {
+      background-color: #4a90e2;
+    }
+    .boton-actualizar:hover:not(:disabled) {
+      background-color: #357abd;
+    }
+    .boton-actualizar:disabled {
+      background-color: #a0c4e9;
+      cursor: not-allowed;
+    }
+    .boton-borrar {
+      background-color: #dc3545;
+    }
+    .boton-borrar:hover:not(:disabled) {
+      background-color: #c82333;
+    }
+    #statusMessage {
+      margin-top: 15px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .success { color: green; }
+    .error { color: red; }
+    #ultimaModificacion {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+    .contenedor-almanaque {
+      margin: 10px auto;
+      text-align: center;
+    }
+    .contenedor-almanaque label {
+      margin-right: 10px;
+      font-weight: bold;
+    }
+    .contenedor-almanaque input[type="date"] {
+      padding: 5px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    /* Estilo para resaltar fechas con registros */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+    }
+    footer {
+      text-align: center;
+      padding: 15px 0;
+      background-color: #e9ecef;
+      color: #6c757d;
+      border-top: 1px solid #dee2e6;
+      margin-top: 30px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Stock de Vinos</h1>
+    <div class="contenedor-stock">
+      <div class="contenedor-almanaque">
+        <label for="fechaConsulta">Consultar stock histórico:</label>
+        <input type="date" id="fechaConsulta">
+      </div>
+      <table id="vinosTable">
+        <thead>
+          <tr>
+            <th>Vino</th>
+            <th>Cantidad</th>
+          </tr>
+        </thead>
+        <tbody id="vinosTableBody">
+          <!-- Las filas se generarán con JavaScript -->
+        </tbody>
+      </table>
+      <button id="actualizar-stock" class="boton-actualizar" disabled>Actualizar Stock</button>
+      <button id="borrar-stock" class="boton-borrar">Borrar Stock Actual</button>
+      <div id="statusMessage"></div>
+      <div id="ultimaModificacion"></div>
+    </div>
+  </main>
+  <footer>
+    <p>© 2025 Cantina L.</p>
+  </footer>
+
+  <script>
+    // --- Datos de Vinos ---
+    const listaVinos = [
+      'Caramañola Tinto 375', 'Caramañola Blanco 375', 'Caramañola Tinto 750',
+      'Caramañola Blanco 750', 'San Felipe Roble', 'San Humberto Reserva',
+      'San Humberto Centenario', 'San Humberto Joven', 'San Humberto Chardonnay',
+      'Cruz Alta Malbec', 'Cruz Alta Chardonnay', 'La Vuelta', 'Cepa Tradicional',
+      'Sade', 'Trumpeter'
+    ];
+
+    // --- Configuración ---
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzRl8gnXILAEabshbjX_NvNmGLU9UwNEYIqU917xS3duPCFzzHsQItdPIytdr8yB8Xoog/exec';
+
+    // --- Elementos del DOM ---
+    let vinosTableBody = document.getElementById('vinosTableBody');
+    let actualizarStockButton = document.getElementById('actualizar-stock');
+    let borrarStockButton = document.getElementById('borrar-stock');
+    let statusMessageDiv = document.getElementById('statusMessage');
+    let ultimaModificacionDiv = document.getElementById('ultimaModificacion');
+    let fechaConsultaInput = document.getElementById('fechaConsulta');
+
+    let debounceTimeout;
+
+    // --- Funciones ---
+
+    const inicializarElementosDOM = () => {
+      if (!vinosTableBody) {
+        console.error('Error: No se encontró el elemento #vinosTableBody');
+        return false;
+      }
+      return true;
+    };
+
+    const generarTablaVinos = (vinos, stockActual = {}) => {
+      console.log('Generando tabla con vinos:', vinos, 'y stock:', stockActual);
+      vinosTableBody.innerHTML = '';
+      if (!vinos || vinos.length === 0) {
+        const fila = document.createElement('tr');
+        const celda = document.createElement('td');
+        celda.colSpan = 2;
+        celda.textContent = 'No hay vinos definidos.';
+        celda.style.textAlign = 'center';
+        fila.appendChild(celda);
+        vinosTableBody.appendChild(fila);
+        return;
+      }
+      vinos.forEach(vino => {
+        const fila = document.createElement('tr');
+        const vinoCelda = document.createElement('td');
+        vinoCelda.textContent = vino;
+        const cantidadCelda = document.createElement('td');
+        const inputCantidad = document.createElement('input');
+        inputCantidad.type = 'number';
+        inputCantidad.value = stockActual[vino] || '';
+        inputCantidad.min = '0';
+        inputCantidad.placeholder = '0';
+        inputCantidad.dataset.vino = vino;
+        cantidadCelda.appendChild(inputCantidad);
+        fila.appendChild(vinoCelda);
+        fila.appendChild(cantidadCelda);
+        vinosTableBody.appendChild(fila);
+      });
+      actualizarEstadoBoton();
+    };
+
+    const actualizarEstadoBoton = () => {
+      const inputsCantidad = vinosTableBody.querySelectorAll('input[type="number"]');
+      let hayDatos = false;
+      inputsCantidad.forEach(input => {
+        const cantidad = parseInt(input.value, 10);
+        if (!isNaN(cantidad) && cantidad >= 0) {
+          hayDatos = true;
+        }
+      });
+      actualizarStockButton.disabled = !hayDatos;
+    };
+
+    const mostrarMensaje = (message, isError = false) => {
+      statusMessageDiv.textContent = message;
+      statusMessageDiv.className = isError ? 'error' : 'success';
+      console.log(isError ? 'Error mostrado:' : 'Mensaje mostrado:', message);
+    };
+
+    const formatearFecha = (fechaStr) => {
+      if (!fechaStr) return 'No hay modificaciones previas';
+      const fecha = new Date(fechaStr);
+      return fecha.toLocaleString('es-AR', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      });
+    };
+
+    const actualizarTablaConStock = (stock) => {
+      const inputsCantidad = vinosTableBody.querySelectorAll('input[type="number"]');
+      inputsCantidad.forEach(input => {
+        const vino = input.dataset.vino;
+        if (stock[vino] !== undefined) {
+          input.value = stock[vino];
+        } else {
+          input.value = '';
+        }
+      });
+      actualizarEstadoBoton();
+    };
+
+    const recopilarDatosStock = () => {
+      const filas = vinosTableBody.querySelectorAll('tr');
+      let stockItems = [];
+      filas.forEach(fila => {
+        const vinoCelda = fila.querySelector('td:first-child');
+        const cantidadInput = fila.querySelector('input[type="number"]');
+        if (vinoCelda && cantidadInput) {
+          const cantidad = parseInt(cantidadInput.value, 10);
+          if (!isNaN(cantidad) && cantidad >= 0) {
+            const vino = vinoCelda.textContent.trim();
+            stockItems.push({ vino, cantidad });
+          }
+        }
+      });
+      return stockItems;
+    };
+
+    const guardarStockEnServidor = async () => {
+      const stockItems = recopilarDatosStock();
+      if (stockItems.length === 0) {
+        mostrarMensaje('Por favor, ingrese la cantidad para al menos un vino.', true);
+        return;
+      }
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'procesarStockVinos', stockItems })
+        });
+        const result = await response.json();
+        if (result.success) {
+          mostrarMensaje('Stock actualizado con éxito!', false);
+          ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.ultimaModificacion)}`;
+          actualizarEstadoBoton();
+          cargarFechasConRegistros(); // Actualizar fechas resaltadas
+        } else {
+          throw new Error(result.error || 'Error desconocido');
+        }
+      } catch (error) {
+        console.error('Error al guardar en el servidor:', error);
+        mostrarMensaje(`Error al guardar el stock: ${error.message}`, true);
+        actualizarEstadoBoton();
+      }
+    };
+
+    const borrarStockActual = async () => {
+      if (!confirm('¿Estás seguro de que deseas borrar el stock actual? Esta acción no se puede deshacer.')) {
+        return;
+      }
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'borrarStockActual' })
+        });
+        const result = await response.json();
+        if (result.success) {
+          mostrarMensaje('Stock actual borrado con éxito!', false);
+          actualizarTablaConStock({}); // Limpiar tabla
+          ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.ultimaModificacion)}`;
+          actualizarEstadoBoton();
+          cargarFechasConRegistros(); // Actualizar fechas resaltadas
+        } else {
+          throw new Error(result.error || 'Error desconocido');
+        }
+      } catch (error) {
+        console.error('Error al borrar el stock:', error);
+        mostrarMensaje(`Error al borrar el stock: ${error.message}`, true);
+      }
+    };
+
+    const cargarDatosIniciales = async () => {
+      console.log('Iniciando carga de datos iniciales desde el servidor...');
+      try {
+        const response = await fetch(`${API_URL}?action=obtenerDatosIniciales`);
+        const result = await response.json();
+        if (result.success) {
+          console.log('Datos recibidos del servidor:', result.data);
+          actualizarTablaConStock(result.data.stock || {});
+          ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.data.ultimaModificacion)}`;
+          cargarFechasConRegistros(); // Cargar fechas con registros
+        } else {
+          throw new Error(result.error || 'Error desconocido');
+        }
+      } catch (error) {
+        console.error('Error al cargar datos del servidor:', error);
+        mostrarMensaje('No se pudieron cargar los datos del servidor. Puedes seguir trabajando sin conexión.', true);
+      }
+    };
+
+    const consultarStockHistorico = async (fecha) => {
+      if (!fecha) {
+        mostrarMensaje('Por favor, seleccione una fecha.', true);
+        return;
+      }
+      try {
+        const response = await fetch(`${API_URL}?action=obtenerStockHistorico&fecha=${fecha}`);
+        const result = await response.json();
+        if (result.success && result.data.stock) {
+          actualizarTablaConStock(result.data.stock);
+          mostrarMensaje(`Stock cargado para la fecha ${result.data.fechaRegistro}`, false);
+        } else {
+          mostrarMensaje(`No se encontraron datos para la fecha ${fecha}.`, true);
+          actualizarTablaConStock({}); // Limpiar tabla si no hay datos
+        }
+      } catch (error) {
+        console.error('Error al consultar stock histórico:', error);
+        mostrarMensaje(`Error al consultar el stock: ${error.message}`, true);
+      }
+    };
+
+    const cargarFechasConRegistros = async () => {
+      try {
+        const response = await fetch(`${API_URL}?action=obtenerFechasConRegistros`);
+        const result = await response.json();
+        if (result.success && result.data.fechas) {
+          // Usar un estilo dinámico para resaltar fechas con registros
+          const fechas = result.data.fechas;
+          const style = document.createElement('style');
+          style.textContent = fechas.map(fecha => `
+            input[type="date"][value="${fecha}"]::-webkit-calendar-picker-indicator,
+            input[type="date"][value="${fecha}"] {
+              background: #4a90e2;
+              color: white;
+              border-radius: 5px;
+            }
+          `).join('');
+          document.head.appendChild(style);
+        }
+      } catch (error) {
+        console.error('Error al cargar fechas con registros:', error);
+        mostrarMensaje('No se pudieron cargar las fechas con registros.', true);
+      }
+    };
+
+    const configurarEventListeners = () => {
+      vinosTableBody.addEventListener('input', (event) => {
+        if (event.target.type === 'number') {
+          statusMessageDiv.textContent = '';
+          actualizarEstadoBoton();
+          clearTimeout(debounceTimeout);
+          debounceTimeout = setTimeout(() => {
+            mostrarMensaje('Guardando cambios...', false);
+            guardarStockEnServidor();
+          }, 1000);
+        }
+      });
+      fechaConsultaInput.addEventListener('change', (event) => {
+        const fecha = event.target.value;
+        consultarStockHistorico(fecha);
+      });
+      actualizarStockButton.addEventListener('click', guardarStockEnServidor);
+      borrarStockButton.addEventListener('click', borrarStockActual);
+    };
+
+    // --- Inicialización ---
+    window.onload = () => {
+      console.log('Página cargada, inicializando...');
+      if (inicializarElementosDOM()) {
+        console.log('Elementos del DOM inicializados correctamente');
+        generarTablaVinos(listaVinos);
+        configurarEventListeners();
+        cargarDatosIniciales();
+      } else {
+        console.error('No se pudieron inicializar los elementos del DOM');
+      }
+    };
+  </script>
+</body>
+</html>

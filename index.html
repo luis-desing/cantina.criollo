@@ -10,7 +10,7 @@
       font-family: 'Arial', sans-serif;
       background-color: #f0f4f8;
       margin: 0;
-      padding: 0;
+      padding: 0; 
       color: #333;
       display: flex;
       flex-direction: column;
@@ -123,7 +123,6 @@
       border-radius: 5px;
       font-size: 16px;
     }
-    /* Estilo para resaltar fechas con registros */
     input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
     }
@@ -296,17 +295,26 @@
         return;
       }
       try {
+        const body = JSON.stringify({ action: 'procesarStockVinos', stockItems });
         const response = await fetch(API_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'procesarStockVinos', stockItems })
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': body.length
+          },
+          body: body,
+          mode: 'cors',
+          credentials: 'omit'
         });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const result = await response.json();
         if (result.success) {
           mostrarMensaje('Stock actualizado con éxito!', false);
           ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.ultimaModificacion)}`;
           actualizarEstadoBoton();
-          cargarFechasConRegistros(); // Actualizar fechas resaltadas
+          cargarFechasConRegistros();
         } else {
           throw new Error(result.error || 'Error desconocido');
         }
@@ -322,18 +330,27 @@
         return;
       }
       try {
+        const body = JSON.stringify({ action: 'borrarStockActual' });
         const response = await fetch(API_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'borrarStockActual' })
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': body.length
+          },
+          body: body,
+          mode: 'cors',
+          credentials: 'omit'
         });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const result = await response.json();
         if (result.success) {
           mostrarMensaje('Stock actual borrado con éxito!', false);
-          actualizarTablaConStock({}); // Limpiar tabla
+          actualizarTablaConStock({});
           ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.ultimaModificacion)}`;
           actualizarEstadoBoton();
-          cargarFechasConRegistros(); // Actualizar fechas resaltadas
+          cargarFechasConRegistros();
         } else {
           throw new Error(result.error || 'Error desconocido');
         }
@@ -346,13 +363,20 @@
     const cargarDatosIniciales = async () => {
       console.log('Iniciando carga de datos iniciales desde el servidor...');
       try {
-        const response = await fetch(`${API_URL}?action=obtenerDatosIniciales`);
+        const response = await fetch(`${API_URL}?action=obtenerDatosIniciales`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit'
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const result = await response.json();
         if (result.success) {
           console.log('Datos recibidos del servidor:', result.data);
           actualizarTablaConStock(result.data.stock || {});
           ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.data.ultimaModificacion)}`;
-          cargarFechasConRegistros(); // Cargar fechas con registros
+          cargarFechasConRegistros();
         } else {
           throw new Error(result.error || 'Error desconocido');
         }
@@ -368,14 +392,21 @@
         return;
       }
       try {
-        const response = await fetch(`${API_URL}?action=obtenerStockHistorico&fecha=${fecha}`);
+        const response = await fetch(`${API_URL}?action=obtenerStockHistorico&fecha=${fecha}`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit'
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const result = await response.json();
         if (result.success && result.data.stock) {
           actualizarTablaConStock(result.data.stock);
           mostrarMensaje(`Stock cargado para la fecha ${result.data.fechaRegistro}`, false);
         } else {
           mostrarMensaje(`No se encontraron datos para la fecha ${fecha}.`, true);
-          actualizarTablaConStock({}); // Limpiar tabla si no hay datos
+          actualizarTablaConStock({});
         }
       } catch (error) {
         console.error('Error al consultar stock histórico:', error);
@@ -385,10 +416,16 @@
 
     const cargarFechasConRegistros = async () => {
       try {
-        const response = await fetch(`${API_URL}?action=obtenerFechasConRegistros`);
+        const response = await fetch(`${API_URL}?action=obtenerFechasConRegistros`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit'
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const result = await response.json();
         if (result.success && result.data.fechas) {
-          // Usar un estilo dinámico para resaltar fechas con registros
           const fechas = result.data.fechas;
           const style = document.createElement('style');
           style.textContent = fechas.map(fecha => `

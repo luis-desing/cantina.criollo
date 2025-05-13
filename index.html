@@ -167,6 +167,7 @@
   </footer>
 
   <script>
+  <script>
     // --- Datos de Vinos ---
     const listaVinos = [
       'Caramañola Tinto 375', 'Caramañola Blanco 375', 'Caramañola Tinto 750',
@@ -177,6 +178,7 @@
     ];
 
     // --- Configuración ---
+    // !!! ASEGÚRATE DE QUE ESTA ES LA URL /exec DE TU IMPLEMENTACIÓN ACTIVA Y CORRECTAMENTE CONFIGURADA !!!
     const API_URL = 'https://script.google.com/macros/s/AKfycbzmmK_3-wvwY8XYpxGWWIV8-bSDnFSyaPUulmLLqkE1LThj8D7sQBFH6IvBV8b9M9lQgQ/exec';
 
     // --- Elementos del DOM ---
@@ -188,19 +190,33 @@
     let fechaConsultaInput = document.getElementById('fechaConsulta');
 
     let debounceTimeout;
+    let isSaving = false; // Bandera para evitar múltiples guardados simultáneos
 
     // --- Funciones ---
 
     const inicializarElementosDOM = () => {
       if (!vinosTableBody) {
         console.error('Error: No se encontró el elemento #vinosTableBody');
-        return false;
+        // Podrías intentar obtenerlo de nuevo o mostrar un error más visible al usuario
+        vinosTableBody = document.getElementById('vinosTableBody');
+        if (!vinosTableBody) return false;
       }
-      return true;
+      // Similar para otros elementos críticos si es necesario
+      actualizarStockButton = document.getElementById('actualizar-stock');
+      borrarStockButton = document.getElementById('borrar-stock');
+      statusMessageDiv = document.getElementById('statusMessage');
+      ultimaModificacionDiv = document.getElementById('ultimaModificacion');
+      fechaConsultaInput = document.getElementById('fechaConsulta');
+
+      return !!(vinosTableBody && actualizarStockButton && borrarStockButton && statusMessageDiv && ultimaModificacionDiv && fechaConsultaInput);
     };
 
     const generarTablaVinos = (vinos, stockActual = {}) => {
       console.log('Generando tabla con vinos:', vinos, 'y stock:', stockActual);
+      if (!vinosTableBody) {
+        console.error("vinosTableBody no está definido al generar tabla.");
+        return;
+      }
       vinosTableBody.innerHTML = '';
       if (!vinos || vinos.length === 0) {
         const fila = document.createElement('tr');
@@ -219,7 +235,7 @@
         const cantidadCelda = document.createElement('td');
         const inputCantidad = document.createElement('input');
         inputCantidad.type = 'number';
-        inputCantidad.value = stockActual[vino] || '';
+        inputCantidad.value = stockActual[vino] !== undefined ? stockActual[vino] : ''; // Manejar 0 explícitamente
         inputCantidad.min = '0';
         inputCantidad.placeholder = '0';
         inputCantidad.dataset.vino = vino;
@@ -232,18 +248,20 @@
     };
 
     const actualizarEstadoBoton = () => {
+      if (!actualizarStockButton) return;
       const inputsCantidad = vinosTableBody.querySelectorAll('input[type="number"]');
-      let hayDatos = false;
+      let hayDatosParaGuardar = false; // Cambiado para reflejar si hay algo que guardar, no solo datos
       inputsCantidad.forEach(input => {
         const cantidad = parseInt(input.value, 10);
-        if (!isNaN(cantidad) && cantidad >= 0) {
-          hayDatos = true;
+        if (!isNaN(cantidad) && cantidad >= 0 && input.value.trim() !== '') { // Considerar campo no vacío
+            hayDatosParaGuardar = true;
         }
       });
-      actualizarStockButton.disabled = !hayDatos;
+      actualizarStockButton.disabled = !hayDatosParaGuardar || isSaving;
     };
 
     const mostrarMensaje = (message, isError = false) => {
+      if (!statusMessageDiv) return;
       statusMessageDiv.textContent = message;
       statusMessageDiv.className = isError ? 'error' : 'success';
       console.log(isError ? 'Error mostrado:' : 'Mensaje mostrado:', message);
@@ -252,13 +270,15 @@
     const formatearFecha = (fechaStr) => {
       if (!fechaStr) return 'No hay modificaciones previas';
       const fecha = new Date(fechaStr);
+      if (isNaN(fecha.getTime())) return 'Fecha inválida'; // Chequeo extra
       return fecha.toLocaleString('es-AR', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: '2-digit', minute: '2-digit' // Formato más explícito
       });
     };
 
     const actualizarTablaConStock = (stock) => {
+      if (!vinosTableBody) return;
       const inputsCantidad = vinosTableBody.querySelectorAll('input[type="number"]');
       inputsCantidad.forEach(input => {
         const vino = input.dataset.vino;
@@ -272,6 +292,7 @@
     };
 
     const recopilarDatosStock = () => {
+      if (!vinosTableBody) return [];
       const filas = vinosTableBody.querySelectorAll('tr');
       let stockItems = [];
       filas.forEach(fila => {
@@ -279,7 +300,9 @@
         const cantidadInput = fila.querySelector('input[type="number"]');
         if (vinoCelda && cantidadInput) {
           const cantidad = parseInt(cantidadInput.value, 10);
-          if (!isNaN(cantidad) && cantidad >= 0) {
+          // Solo incluir si la cantidad es un número válido y no está vacío
+          // Si el input está vacío, cantidadInput.value será "", e parseInt("") es NaN
+          if (cantidadInput.value.trim() !== '' && !isNaN(cantidad) && cantidad >= 0) {
             const vino = vinoCelda.textContent.trim();
             stockItems.push({ vino, cantidad });
           }
@@ -288,129 +311,179 @@
       return stockItems;
     };
 
+    const enviarAlServidor = async (action, payload = {}) => {
+        isSaving = true;
+        actualizarEstadoBoton(); // Deshabilitar botón mientras se guarda
+
+        const body = JSON.stringify({ action, ...payload });
+        console.log(`Enviando a servidor. Acción: ${action}, Payload:`, payload);
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Content-Length': body.length // Dejar que fetch lo maneje
+                },
+                body: body,
+                mode: 'cors', // Necesario para peticiones cross-origin
+                // redirect: 'follow', // Google Apps Script a veces hace redirects para auth
+            });
+
+            // Intenta parsear como JSON incluso si no es ok, para obtener mensajes de error del script
+            let result;
+            const responseText = await response.text();
+            try {
+                result = JSON.parse(responseText);
+            } catch (e) {
+                // Si la respuesta no es JSON, usar el texto como error
+                console.error("Respuesta no es JSON:", responseText);
+                throw new Error(`Respuesta inesperada del servidor (HTTP ${response.status}): ${responseText.substring(0,100)}...`);
+            }
+            
+            console.log('Respuesta del servidor:', result);
+
+            if (!response.ok || !result.success) {
+                const errorMessage = result.error || `Error del servidor (HTTP ${response.status})`;
+                throw new Error(errorMessage);
+            }
+            return result;
+
+        } catch (error) {
+            console.error(`Error en la comunicación con el servidor (${action}):`, error);
+            mostrarMensaje(`Error en ${action}: ${error.message}`, true);
+            throw error; // Re-lanzar para que el llamador pueda manejarlo
+        } finally {
+            isSaving = false;
+            actualizarEstadoBoton();
+        }
+    };
+
+
     const guardarStockEnServidor = async () => {
       const stockItems = recopilarDatosStock();
-      if (stockItems.length === 0) {
-        mostrarMensaje('Por favor, ingrese la cantidad para al menos un vino.', true);
+      // Aunque el botón se deshabilita si no hay datos, una doble verificación es buena.
+      if (stockItems.length === 0 && !confirm("No hay cantidades ingresadas. ¿Deseas guardar un stock vacío (borrará el stock actual en la hoja 'Stock')?")) {
+        mostrarMensaje('Guardado cancelado. No se ingresaron cantidades.', false);
+        // Si no hay items, no se envia nada, pero se limpian los inputs.
+        // Opcionalmente, podrías no hacer nada aquí si el usuario cancela.
+        // cargarDatosIniciales(); // Para recargar el último estado guardado
         return;
       }
+      // Si el usuario confirma guardar un stock vacío, stockItems será un array vacío.
+      // El backend procesarStockVinos lo manejará limpiando la hoja de stock.
+
+      mostrarMensaje('Guardando cambios...', false); // Mensaje optimista
       try {
-        const body = JSON.stringify({ action: 'procesarStockVinos', stockItems });
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': body.length
-          },
-          body: body,
-          mode: 'cors',
-          credentials: 'omit'
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        if (result.success) {
-          mostrarMensaje('Stock actualizado con éxito!', false);
+        const result = await enviarAlServidor('procesarStockVinos', { stockItems });
+        mostrarMensaje('Stock actualizado con éxito!', false);
+        if (ultimaModificacionDiv && result.ultimaModificacion) {
           ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.ultimaModificacion)}`;
-          actualizarEstadoBoton();
-          cargarFechasConRegistros();
-        } else {
-          throw new Error(result.error || 'Error desconocido');
         }
+        cargarFechasConRegistros(); // Actualizar indicador de fechas
       } catch (error) {
-        console.error('Error al guardar en el servidor:', error);
-        mostrarMensaje(`Error al guardar el stock: ${error.message}`, true);
-        actualizarEstadoBoton();
+        // El mensaje de error ya se muestra en enviarAlServidor
       }
     };
 
-    const borrarStockActual = async () => {
+    const borrarStockActualEnServidor = async () => {
       if (!confirm('¿Estás seguro de que deseas borrar el stock actual? Esta acción no se puede deshacer.')) {
         return;
       }
+      mostrarMensaje('Borrando stock...', false);
       try {
-        const body = JSON.stringify({ action: 'borrarStockActual' });
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': body.length
-          },
-          body: body,
-          mode: 'cors',
-          credentials: 'omit'
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        if (result.success) {
-          mostrarMensaje('Stock actual borrado con éxito!', false);
-          actualizarTablaConStock({});
+        const result = await enviarAlServidor('borrarStockActual');
+        mostrarMensaje('Stock actual borrado con éxito!', false);
+        actualizarTablaConStock({}); // Limpiar la tabla en el frontend
+        if (ultimaModificacionDiv && result.ultimaModificacion) {
           ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.ultimaModificacion)}`;
-          actualizarEstadoBoton();
-          cargarFechasConRegistros();
-        } else {
-          throw new Error(result.error || 'Error desconocido');
         }
+        cargarFechasConRegistros();
       } catch (error) {
-        console.error('Error al borrar el stock:', error);
-        mostrarMensaje(`Error al borrar el stock: ${error.message}`, true);
+        // El mensaje de error ya se muestra en enviarAlServidor
       }
     };
 
     const cargarDatosIniciales = async () => {
       console.log('Iniciando carga de datos iniciales desde el servidor...');
+      mostrarMensaje('Cargando datos iniciales...', false);
       try {
         const response = await fetch(`${API_URL}?action=obtenerDatosIniciales`, {
           method: 'GET',
           mode: 'cors',
-          credentials: 'omit'
+          // redirect: 'follow',
         });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        
+        let result;
+        const responseText = await response.text();
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.error("Respuesta de obtenerDatosIniciales no es JSON:", responseText);
+            throw new Error(`Respuesta inesperada del servidor (HTTP ${response.status}): ${responseText.substring(0,100)}...`);
         }
-        const result = await response.json();
-        if (result.success) {
-          console.log('Datos recibidos del servidor:', result.data);
-          actualizarTablaConStock(result.data.stock || {});
+
+        console.log('Datos iniciales recibidos del servidor:', result);
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Error desconocido al cargar datos iniciales');
+        }
+        
+        generarTablaVinos(listaVinos, result.data.stock || {}); // Asegurar que la tabla se genera/regenera con los vinos
+        // actualizarTablaConStock(result.data.stock || {}); // Esto podría ser redundante si generarTablaVinos ya lo hace
+        if (ultimaModificacionDiv && result.data.ultimaModificacion) {
           ultimaModificacionDiv.textContent = `Última modificación: ${formatearFecha(result.data.ultimaModificacion)}`;
-          cargarFechasConRegistros();
-        } else {
-          throw new Error(result.error || 'Error desconocido');
         }
+        mostrarMensaje('Datos cargados.', false);
+        cargarFechasConRegistros(); // Cargar después de que los datos principales estén listos
       } catch (error) {
         console.error('Error al cargar datos del servidor:', error);
-        mostrarMensaje('No se pudieron cargar los datos del servidor. Puedes seguir trabajando sin conexión.', true);
+        mostrarMensaje(`Error al cargar datos: ${error.message}. Puedes seguir trabajando offline con los datos predefinidos.`, true);
+        generarTablaVinos(listaVinos, {}); // Generar tabla vacía si falla la carga
       }
     };
 
     const consultarStockHistorico = async (fecha) => {
       if (!fecha) {
         mostrarMensaje('Por favor, seleccione una fecha.', true);
+        cargarDatosIniciales(); // Volver al stock actual si se deselecciona la fecha
         return;
       }
+      mostrarMensaje(`Consultando stock para ${fecha}...`, false);
       try {
         const response = await fetch(`${API_URL}?action=obtenerStockHistorico&fecha=${fecha}`, {
           method: 'GET',
           mode: 'cors',
-          credentials: 'omit'
+          // redirect: 'follow',
         });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        
+        let result;
+        const responseText = await response.text();
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.error(`Respuesta de obtenerStockHistorico (${fecha}) no es JSON:`, responseText);
+            throw new Error(`Respuesta inesperada del servidor (HTTP ${response.status}): ${responseText.substring(0,100)}...`);
         }
-        const result = await response.json();
-        if (result.success && result.data.stock) {
-          actualizarTablaConStock(result.data.stock);
+        
+        console.log(`Stock histórico para ${fecha} recibido:`, result);
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || `Error al obtener stock histórico para ${fecha}`);
+        }
+
+        if (result.data && result.data.stock && Object.keys(result.data.stock).length > 0) {
+          // Volver a generar la tabla con la lista completa de vinos, y el stock histórico para esa fecha
+          generarTablaVinos(listaVinos, result.data.stock);
           mostrarMensaje(`Stock cargado para la fecha ${result.data.fechaRegistro}`, false);
         } else {
+          generarTablaVinos(listaVinos, {}); // Mostrar tabla vacía si no hay datos
           mostrarMensaje(`No se encontraron datos para la fecha ${fecha}.`, true);
-          actualizarTablaConStock({});
         }
       } catch (error) {
         console.error('Error al consultar stock histórico:', error);
-        mostrarMensaje(`Error al consultar el stock: ${error.message}`, true);
+        mostrarMensaje(`Error al consultar stock histórico: ${error.message}`, true);
+        generarTablaVinos(listaVinos, {}); // Mostrar tabla vacía en caso de error
       }
     };
 
@@ -419,49 +492,97 @@
         const response = await fetch(`${API_URL}?action=obtenerFechasConRegistros`, {
           method: 'GET',
           mode: 'cors',
-          credentials: 'omit'
+          // redirect: 'follow',
         });
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        
+        let result;
+        const responseText = await response.text();
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.error("Respuesta de obtenerFechasConRegistros no es JSON:", responseText);
+            // No mostrar error crítico por esto, es una mejora visual
+            console.warn("No se pudieron cargar las fechas con registros para el calendario.");
+            return;
         }
-        const result = await response.json();
-        if (result.success && result.data.fechas) {
+
+        if (!response.ok || !result.success) {
+          console.warn(result.error || 'Error desconocido al cargar fechas con registros.');
+          return;
+        }
+        
+        if (result.data && result.data.fechas) {
           const fechas = result.data.fechas;
+          // Eliminar estilo anterior si existe
+          const oldStyle = document.getElementById('highlight-dates-style');
+          if (oldStyle) {
+            oldStyle.remove();
+          }
+          // Crear nuevo estilo
           const style = document.createElement('style');
-          style.textContent = fechas.map(fecha => `
-            input[type="date"][value="${fecha}"]::-webkit-calendar-picker-indicator,
-            input[type="date"][value="${fecha}"] {
-              background: #4a90e2;
-              color: white;
-              border-radius: 5px;
-            }
-          `).join('');
-          document.head.appendChild(style);
+          style.id = 'highlight-dates-style'; // ID para poder removerlo/actualizarlo
+          // Esta forma de resaltar fechas directamente en el input[type="date"]
+          // tiene un soporte limitado en navegadores. Una alternativa sería usar
+          // una librería de datepicker que permita marcar días.
+          // Por ahora, no agregaré estilos complejos que podrían no funcionar.
+          // Lo más útil es tener la lista de fechas para el usuario.
+          // Quizás podrías popular un <datalist> para el input.
+          console.log("Fechas con registros históricos:", fechas);
+          // Aquí podrías hacer algo más visual si encuentras una forma compatible
         }
       } catch (error) {
         console.error('Error al cargar fechas con registros:', error);
-        mostrarMensaje('No se pudieron cargar las fechas con registros.', true);
+        // No es crítico, no mostrar mensaje de error al usuario por esto
       }
     };
 
     const configurarEventListeners = () => {
+      if (!vinosTableBody || !fechaConsultaInput || !actualizarStockButton || !borrarStockButton) {
+        console.error("Faltan elementos del DOM para configurar event listeners.");
+        return;
+      }
+
       vinosTableBody.addEventListener('input', (event) => {
-        if (event.target.type === 'number') {
-          statusMessageDiv.textContent = '';
-          actualizarEstadoBoton();
+        if (event.target.tagName === 'INPUT' && event.target.type === 'number') {
+          if (statusMessageDiv) statusMessageDiv.textContent = ''; // Limpiar mensajes anteriores
+          actualizarEstadoBoton(); // Habilitar/deshabilitar botón de actualizar
+          
+          // Debounce para autoguardado
           clearTimeout(debounceTimeout);
           debounceTimeout = setTimeout(() => {
-            mostrarMensaje('Guardando cambios...', false);
-            guardarStockEnServidor();
-          }, 1000);
+            // Solo guardar si el botón de actualizar está habilitado (es decir, hay cambios válidos)
+            if (!actualizarStockButton.disabled) {
+                 // Y no estamos consultando una fecha histórica (porque entonces los cambios son para el actual)
+                if (!fechaConsultaInput.value) { // Si no hay fecha seleccionada en el calendario
+                    console.log("Autoguardando por input...");
+                    guardarStockEnServidor();
+                } else {
+                    console.log("Cambio en input mientras se ve histórico. No se autoguarda. Use el botón 'Actualizar Stock' para guardar el estado actual.");
+                    mostrarMensaje("Estás viendo un histórico. Los cambios se aplicarán al stock actual si presionas 'Actualizar Stock'.", false);
+                }
+            }
+          }, 2000); // Aumentado a 2 segundos
         }
       });
+
       fechaConsultaInput.addEventListener('change', (event) => {
         const fecha = event.target.value;
         consultarStockHistorico(fecha);
       });
-      actualizarStockButton.addEventListener('click', guardarStockEnServidor);
-      borrarStockButton.addEventListener('click', borrarStockActual);
+
+      actualizarStockButton.addEventListener('click', () => {
+        // Al hacer clic en "Actualizar Stock", siempre se guarda el estado actual de la tabla,
+        // independientemente de si se estaba viendo un histórico.
+        // Si se estaba viendo un histórico y se modificaron valores, esos valores
+        // ahora se guardarán como el stock actual.
+        if (fechaConsultaInput.value) {
+            alert("Estás guardando el contenido actual de la tabla como el nuevo stock. La fecha de consulta histórica será ignorada para esta acción.");
+            fechaConsultaInput.value = ""; // Limpiar la fecha para reflejar que se opera sobre el stock actual
+        }
+        guardarStockEnServidor();
+      });
+      
+      borrarStockButton.addEventListener('click', borrarStockActualEnServidor);
     };
 
     // --- Inicialización ---
@@ -469,11 +590,12 @@
       console.log('Página cargada, inicializando...');
       if (inicializarElementosDOM()) {
         console.log('Elementos del DOM inicializados correctamente');
-        generarTablaVinos(listaVinos);
+        // generarTablaVinos se llama dentro de cargarDatosIniciales
         configurarEventListeners();
-        cargarDatosIniciales();
+        cargarDatosIniciales(); // Esto ahora también genera la tabla
       } else {
-        console.error('No se pudieron inicializar los elementos del DOM');
+        console.error('No se pudieron inicializar los elementos críticos del DOM. La aplicación puede no funcionar correctamente.');
+        document.body.innerHTML = '<h1>Error Crítico</h1><p>No se pudieron cargar los componentes necesarios de la página. Por favor, recarga o contacta al administrador.</p>';
       }
     };
   </script>

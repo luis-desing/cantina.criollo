@@ -1,0 +1,182 @@
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #f0f4f8;
+  margin: 0;
+  padding: 0;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1;
+}
+
+h1 {
+  text-align: center;
+  color: #4a90e2;
+  margin-top: 20px;
+  font-size: 24px;
+}
+
+.contenedor-stock {
+  margin: 20px auto;
+  padding: 20px;
+  border-radius: 10px;
+  background-color: #fff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  width: 90%;
+  max-width: 500px;
+}
+
+#vinosTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+#vinosTable th,
+#vinosTable td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: left;
+  vertical-align: middle;
+}
+
+#vinosTable th {
+  background-color: #f0f4f8;
+  font-weight: bold;
+  color: #333;
+}
+
+#vinosTable tbody tr:nth-child(odd) {
+  background-color: #f9f9f9;
+}
+
+#vinosTable tbody tr:hover {
+  background-color: #f1f1f1;
+}
+
+#vinosTable td input[type="number"] {
+  width: 60px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #fff;
+  font-size: 16px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.boton-actualizar,
+.boton-borrar {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 15px;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+.boton-actualizar {
+  background-color: #4a90e2;
+}
+
+.boton-actualizar:hover:not(:disabled) {
+  background-color: #357abd;
+}
+
+.boton-actualizar:disabled {
+  background-color: #a0c4e9;
+  cursor: not-allowed;
+}
+
+.boton-borrar {
+  background-color: #dc3545;
+}
+
+.boton-borrar:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.boton-compartir {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 15px;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  box-sizing: border-box;
+  background-color: #25D366; /* Color de WhatsApp */
+}
+
+.boton-compartir:hover:not(:disabled) {
+  background-color: #128C7E; /* Color de WhatsApp más oscuro */
+}
+
+.boton-compartir:disabled {
+  background-color: #a7e9bc;
+  cursor: not-allowed;
+}
+
+#statusMessage {
+  margin-top: 15px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.success {
+  color: green;
+}
+
+.error {
+  color: red;
+}
+
+#ultimaModificacion {
+  text-align: center;
+  margin-top: 10px;
+  font-size: 14px;
+  color: #555;
+}
+
+.contenedor-almanaque {
+  margin: 10px auto;
+  text-align: center;
+}
+
+.contenedor-almanaque label {
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.contenedor-almanaque input[type="date"] {
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+footer {
+  text-align: center;
+  padding: 15px 0;
+  background-color: #e9ecef;
+  color: #6c757d;
+  border-top: 1px solid #dee2e6;
+  margin-top: 30px;
+  width: 100%;
+}
